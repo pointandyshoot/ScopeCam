@@ -1,0 +1,4 @@
+<resources>
+    <string name="lens_status">ScopeCam %1$s · TELE %2$s · %3$s</string>
+    <string name="camera_permission_denied">Camera permission denied. Use Retry or Android Settings.</string>
+</resources>
