@@ -1,6 +1,6 @@
 # ScopeCam
 
-A video-first, offline Android camera for a **Pixel 10 (non-Pro)** with a **10× monocular over its 5× telephoto lens**. ScopeCam 0.1.1 is a device-testing build. It corrects the preview orientation and aspect ratio reported in 0.1.0.
+A video-first, offline Android camera for a **Pixel 10 (non-Pro)** with a **10× monocular over its 5× telephoto lens**. ScopeCam 0.1.2 is a device-testing build. It includes the preview orientation/aspect correction and an inset that sizes itself to the 1× image.
 
 ## Build and install
 
@@ -25,7 +25,7 @@ Set `ANDROID_HOME` to your SDK location or let Android Studio create the ignored
 
 Recording turns off the finder by default. **Options → Keep 1× finder while recording** probes an experimental three-stream session at the selected recording size/FPS. If rejected, the controller tries the YUV preview route and then telephoto alone. It does **not lower the selected recording resolution/FPS to retain the finder**. Change this option before recording; changing cameras halfway through a file is deliberately disabled. The inset, reticle and all controls are preview UI only, and never appear in the MP4.
 
-Portrait and landscape previews fit the full sensor buffer without a digital zoom. PRIVATE previews account for Camera2's existing sensor rotation; raw YUV previews apply sensor rotation themselves. Both use the same aspect-preserving fit and respond to 180° display changes. Calibration is stored in sensor coordinates and rotates with the display. MP4 orientation is fixed when Record is pressed, so hold the phone in that orientation for the clip. Rotating during recording rotates the display but does not change the MP4 orientation tag. Leaving the app or locking the screen stops and attempts to save a valid recording; background recording is not implemented.
+Portrait and landscape previews fit the full sensor buffer without a digital zoom. The 1× inset follows the image aspect ratio within 212 × 150 dp, anchored at the top right, so unused black panels do not cover the telephoto view. Its dimensions update after rotation or switching between PRIVATE and YUV preview streams. PRIVATE previews account for Camera2's existing sensor rotation; raw YUV previews apply sensor rotation themselves. Both use the same aspect-preserving fit and respond to 180° display changes. Calibration is stored in sensor coordinates and rotates with the display. MP4 orientation is fixed when Record is pressed, so hold the phone in that orientation for the clip. Rotating during recording rotates the display but does not change the MP4 orientation tag. Leaving the app or locking the screen stops and attempts to save a valid recording; background recording is not implemented.
 
 ## Physical-camera selection and session architecture
 
@@ -45,7 +45,7 @@ After `FOCUSED_LOCKED`, a returned **physical telephoto** focus distance is held
 
 ## Stabilisation and video modes
 
-Google specifies optical and electronic stabilisation on the Pixel 10 wide and telephoto cameras. That **does not establish which modes third-party Camera2 physical streams expose**. User diagnostics from a Pixel 10/API 37 running 0.1.0 confirm an accepted dual PRIVATE preview session with physical results from the main and telephoto cameras, and returned preview stabilisation mode 2. Preview orientation/distortion was reported and is addressed in 0.1.1; the correction still needs on-device confirmation. Effective AF/AE mapping, recording session acceptance, 4K/60 availability and thermal behaviour remain **unverified**. Diagnostics are the source of truth for the installed phone and OS version.
+Google specifies optical and electronic stabilisation on the Pixel 10 wide and telephoto cameras. That **does not establish which modes third-party Camera2 physical streams expose**. User diagnostics from a Pixel 10/API 37 running 0.1.0 confirm an accepted dual PRIVATE preview session with physical results from the main and telephoto cameras, and returned preview stabilisation mode 2. Preview orientation/distortion was reported and addressed in 0.1.1. Subsequent user feedback reports successful recording and good focus; it also identified black panels around the finder, addressed in 0.1.2. Effective AF/AE mapping, recording session acceptance, 4K/60 availability and thermal behaviour remain **unverified**. Diagnostics are the source of truth for the installed phone and OS version.
 
 The implementation queries physical OIS and video-stabilisation capabilities. Its automatic policy is:
 

@@ -103,11 +103,14 @@ class MainActivity : Activity() {
         root.addView(header)
         val stage = FrameLayout(this)
         primary = PreviewPane(this)
-        finderPane = PreviewPane(this).apply { showReticle = true }
+        finderPane = PreviewPane(this).apply {
+            showReticle = true
+            fitContentWithin(dp(212), dp(150))
+        }
         stage.addView(primary, FrameLayout.LayoutParams(-1, -1))
         // Keep TextureView attached and visible, even when finder is off. Alpha hides it
         // without destroying a surface required by the next asynchronous session.
-        val finderBox = FrameLayout.LayoutParams(dp(212), dp(150), Gravity.TOP or Gravity.END).apply {
+        val finderBox = FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.END).apply {
             topMargin = dp(8); marginEnd = dp(8)
         }
         stage.addView(finderPane, finderBox)

@@ -1,3 +1,9 @@
+# Finder sizing — 0.1.2
+
+The follow-up 0.1.1 screenshot shows a correctly oriented portrait finder image inside a fixed landscape-shaped panel. The user reports successful recording and good focus. The 0.1.2 finder uses the existing aspect-preserving geometry to measure its own bounds within 212 × 150 dp, follows rotation and PRIVATE/YUV stream-size changes, and stays anchored at the top right. Reticle/tap mapping uses the same fitted image rectangle. Camera output bindings and recording/focus controls are unchanged.
+
+Verification uses the existing 15 geometry/policy tests, strict lint and debug APK build in the Android workflow. On-device confirmation is still needed for the resized inset in portrait, landscape and calibration.
+
 # Preview correction — 0.1.1
 
 The 0.1.0 Pixel 10/API 37 user report confirmed an accepted physical PRIVATE preview pair and capture results from both main and telephoto cameras. It also identified incorrect orientation and a distorted telephoto preview.

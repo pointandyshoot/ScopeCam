@@ -9,6 +9,8 @@ import android.view.TextureView
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.ImageView
+import kotlin.math.min
+import kotlin.math.roundToInt
 
 /** Preview-only transform; fits the complete buffer, preserving calibration coordinates. */
 class PreviewPane(context: Context) : FrameLayout(context) {
@@ -21,6 +23,8 @@ class PreviewPane(context: Context) : FrameLayout(context) {
     @Volatile private var displayDegrees = 0
     private val rotationDegrees: Int get() = (sensorDegrees - displayDegrees + 360) % 360
     @Volatile private var sensorAspect = 4f / 3f
+    private var contentMaxWidth = 0
+    private var contentMaxHeight = 0
     var onReady: (() -> Unit)? = null
     var onLost: (() -> Unit)? = null
     var onCalibrate: ((Calibration) -> Unit)? = null
@@ -42,7 +46,11 @@ class PreviewPane(context: Context) : FrameLayout(context) {
         overlay.visibility = GONE
         texture.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
             override fun onSurfaceTextureAvailable(surface: SurfaceTexture, width: Int, height: Int) { updateTransform(); onReady?.invoke() }
-            override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) { updateTransform() }
+            override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) {
+                // View dimensions can change independently of the configured camera stream.
+                surface.setDefaultBufferSize(sourceSize.width, sourceSize.height)
+                updateTransform()
+            }
             override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean { onLost?.invoke(); return true }
             override fun onSurfaceTextureUpdated(surface: SurfaceTexture) = Unit
         }
@@ -62,18 +70,47 @@ class PreviewPane(context: Context) : FrameLayout(context) {
     }
     override fun performClick(): Boolean { super.performClick(); return true }
     val ready: Boolean get() = texture.isAvailable
+    /** WRAP_CONTENT inset: its bounds follow the fitted image, inside these limits. */
+    fun fitContentWithin(maxWidth: Int, maxHeight: Int) {
+        require(maxWidth > 0 && maxHeight > 0)
+        contentMaxWidth = maxWidth; contentMaxHeight = maxHeight
+        requestLayout()
+    }
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        if (contentMaxWidth == 0 || contentMaxHeight == 0) {
+            super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+            return
+        }
+        fun available(spec: Int, limit: Int) = if (MeasureSpec.getMode(spec) == MeasureSpec.UNSPECIFIED)
+            limit else min(limit, MeasureSpec.getSize(spec))
+        val availableWidth = available(widthMeasureSpec, contentMaxWidth)
+        val availableHeight = available(heightMeasureSpec, contentMaxHeight)
+        if (availableWidth == 0 || availableHeight == 0) {
+            super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+            return
+        }
+        val fit = previewGeometry(sourceSize.width, sourceSize.height, availableWidth, availableHeight,
+            sensorDegrees, displayDegrees)
+        super.onMeasure(
+            MeasureSpec.makeMeasureSpec(fit.contentWidth.roundToInt().coerceAtLeast(1), MeasureSpec.EXACTLY),
+            MeasureSpec.makeMeasureSpec(fit.contentHeight.roundToInt().coerceAtLeast(1), MeasureSpec.EXACTLY))
+    }
     fun sensorAspect(value: Float) { sensorAspect = value; post { updateTransform() } }
     fun rotatePreview(sensor: Int, display: Int) {
+        val changed = sensorDegrees != sensor || displayDegrees != display
         sensorDegrees = sensor; displayDegrees = display; updateTransform()
+        if (changed) requestLayout()
     }
     fun surface(size: Size, sensor: Int, display: Int): Surface {
         sourceSize = size; sensorDegrees = sensor; displayDegrees = display
         val source = texture.surfaceTexture ?: error("Preview surface is not ready")
         source.setDefaultBufferSize(size.width, size.height)
-        post { clearYuv(); updateTransform() }
+        post { clearYuv(); requestLayout(); updateTransform() }
         return Surface(source)
     }
     fun showYuv(value: Bitmap, sensor: Int, display: Int) {
+        val changed = sourceSize.width != value.width || sourceSize.height != value.height ||
+            sensorDegrees != sensor || displayDegrees != display
         sourceSize = Size(value.width, value.height); sensorDegrees = sensor; displayDegrees = display
         bitmap = value
         value.density = Bitmap.DENSITY_NONE // Matrix coordinates are buffer pixels, not dp.
@@ -81,6 +118,7 @@ class PreviewPane(context: Context) : FrameLayout(context) {
         // Displayed bitmaps are collected after RenderThread releases them; recycling
         // them on a handler can race a queued display-list draw.
         updateTransform()
+        if (changed) requestLayout()
     }
     fun clearYuv() {
         image.visibility = GONE; image.setImageDrawable(null)
