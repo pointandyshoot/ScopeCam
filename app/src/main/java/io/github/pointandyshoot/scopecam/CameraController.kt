@@ -71,6 +71,7 @@ class CameraController(
     private var orientation = 0
     private var mode = preferredModes.first()
     private var opticalOnly = false
+    private var videoOnly = false
     private var continuous = false
     private var exposure = 0
     private var distance: Float? = null
@@ -88,6 +89,7 @@ class CameraController(
     private var recordingSurface: Surface? = null
     private var lastStatus = CameraStatus()
     private var reported = "No capture results yet"
+    private var lastRecordingReport: String? = null
     private var frames = 0
     private var lastFrameMs = 0L
     private var lastUiMs = 0L
@@ -95,10 +97,12 @@ class CameraController(
     private var stabilisation = Stabilisation(0, 0, "Unavailable")
     private var savedUri: Uri? = null
 
-    fun start(modeKey: String?, finderOn: Boolean, oisOnly: Boolean, centreContinuous: Boolean, rotationDegrees: Int) = worker.post {
+    fun start(modeKey: String?, finderOn: Boolean, oisOnly: Boolean, centreContinuous: Boolean, rotationDegrees: Int,
+              recordingStabilisation: Boolean = false) = worker.post {
         if (destroyed) return@post
         running = true; orientation = rotationDegrees
         finderWanted = finderOn; opticalOnly = oisOnly; continuous = centreContinuous
+        videoOnly = recordingStabilisation
         try {
             if (inventory == null) {
                 recorder.clearAbandonedPending()
@@ -142,8 +146,8 @@ class CameraController(
         continuous = value; infinity = false; distance = null; afPending = false
         if (session != null) refocusInternal()
     }
-    fun setOpticalOnly(value: Boolean) = worker.post {
-        if (!recordWanted) { opticalOnly = value; reopen() }
+    fun setStabilisation(optical: Boolean, video: Boolean) = worker.post {
+        if (!recordWanted) { opticalOnly = optical; videoOnly = video; reopen() }
     }
     fun setExposure(value: Int) = worker.post {
         exposure = value; updateRepeating()
@@ -171,6 +175,7 @@ class CameraController(
     fun record(keepFinder: Boolean, audio: Boolean, rotationDegrees: Int) = worker.post {
         if (session == null || recordWanted || mode !in inventory?.modes.orEmpty()) return@post
         recordWanted = true; finderWanted = keepFinder; audioWanted = audio
+        lastRecordingReport = null
         orientation = rotationDegrees
         reopen()
     }
@@ -261,7 +266,7 @@ class CameraController(
         yuv = liveFinder && fallback == 1
         frames = 0; captureFailures = 0; lastFrameMs = SystemClock.elapsedRealtime()
         stabilisation = chooseStabilisation(info.tele[CC.CONTROL_AVAILABLE_VIDEO_STABILIZATION_MODES].orEmpty().toSet(),
-            info.tele[CC.LENS_INFO_AVAILABLE_OPTICAL_STABILIZATION].orEmpty().toSet(), mode, opticalOnly || forceOptical)
+            info.tele[CC.LENS_INFO_AVAILABLE_OPTICAL_STABILIZATION].orEmpty().toSet(), mode, opticalOnly || forceOptical, videoOnly)
         try {
             if (recordWanted) recorder.prepare(mode, ((info.tele[CC.SENSOR_ORIENTATION] ?: 90) - orientation + 360) % 360, audioWanted)
             val bindings = safeBindings(info.pair.tele.id, info.pair.wide.id, liveFinder, recordWanted)
@@ -463,8 +468,10 @@ class CameraController(
                 "Tele metadata: ${if (physical == null) "unavailable; below is logical except lens" else "available"}\n" +
                 "AF=$af · lens=$lens dioptres · AE=${metadata[CaptureResult.CONTROL_AE_STATE]}\n" +
                 "Returned OIS=${metadata[CaptureResult.LENS_OPTICAL_STABILIZATION_MODE]}, video stab=${metadata[CaptureResult.CONTROL_VIDEO_STABILIZATION_MODE]}\n" +
+                "Logical OIS=${result[CaptureResult.LENS_OPTICAL_STABILIZATION_MODE]}, video stab=${result[CaptureResult.CONTROL_VIDEO_STABILIZATION_MODE]}\n" +
                 "Returned crop=${physical?.get(CaptureResult.SCALER_CROP_REGION)} · fps=${metadata[CaptureResult.CONTROL_AE_TARGET_FPS_RANGE]}\n" +
                 "AF region=${metadata[CaptureResult.CONTROL_AF_REGIONS]?.toList()}\nAE region=${metadata[CaptureResult.CONTROL_AE_REGIONS]?.toList()}"
+            if (recorder.started) lastRecordingReport = "Mode: ${mode.key} · requested ${stabilisation.label} · OIS=${stabilisation.ois}, video=${stabilisation.video}\n$reported"
             if (lastFrameMs - lastUiMs > 750) { lastUiMs = lastFrameMs; publish(lastStatus.message, true, false) }
         }
         override fun onCaptureFailed(current: CameraCaptureSession, capture: CaptureRequest, failure: CaptureFailure) {
@@ -491,8 +498,10 @@ class CameraController(
         val details = "ScopeCam ${BuildConfig.VERSION_NAME} · ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL} · API ${android.os.Build.VERSION.SDK_INT}\n\n" +
             (info?.report ?: "No camera inventory") + "\nSession attempts:\n${attempts.joinToString("\n")}\n\n" +
             "Requested stabilisation: ${stabilisation.label} · OIS=${stabilisation.ois} · video=${stabilisation.video}\n" +
+            "Independent tele stabilisation keys: OIS=${CaptureRequest.LENS_OPTICAL_STABILIZATION_MODE in info?.physicalKeys.orEmpty()}, video=${CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE in info?.physicalKeys.orEmpty()}. Returned modes do not measure shake reduction.\n" +
             "Central AF/AE: 20% tele width/height; physical overrides where supported; otherwise FOV-scaled logical coordinates (HAL mapping needs verification).\n" +
-            "Digital zoom: no added zoom. Recording mode: ${mode.key}\n" + reported
+            "Digital zoom: no added zoom. Recording mode: ${mode.key}\n" + reported +
+            if (!recorder.started && lastRecordingReport != null) "\n\nLast recording results:\n$lastRecordingReport" else ""
         lastStatus = CameraStatus(ready, busy, recorder.started, liveFinder && ready, state, message, focusText, details, savedUri)
         val snapshot = lastStatus
         ui.post { statusCallback(snapshot) }

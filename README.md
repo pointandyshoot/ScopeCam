@@ -1,6 +1,6 @@
 # ScopeCam
 
-A video-first, offline Android camera for a **Pixel 10 (non-Pro)** with a **10× monocular over its 5× telephoto lens**. ScopeCam 0.1.2 is a device-testing build. It includes the preview orientation/aspect correction and an inset that sizes itself to the 1× image.
+A video-first, offline Android camera for a **Pixel 10 (non-Pro)** with a **10× monocular over its 5× telephoto lens**. ScopeCam 0.1.3 is a device-testing build. The 1× finder stays on by default during recording, and stabilisation choices include a separate recording-oriented video mode.
 
 ## Build and install
 
@@ -23,7 +23,7 @@ Set `ANDROID_HOME` to your SDK location or let Android Studio create the ignored
 5. **Refocus** triggers centre AF once, then holds a successful lens position. Focus the monocular manually afterwards. If AF misses or times out, tap Refocus again. Options allows continuous centre AF; Focus / exposure provides an optional infinity request and small exposure adjustment.
 6. Choose an advertised, encoder-supported telephoto video mode, then **Record**. **Stop** saves H.264/AAC MP4 in **Movies/ScopeCam**, visible in the gallery. Last video opens the latest saved clip.
 
-Recording turns off the finder by default. **Options → Keep 1× finder while recording** probes an experimental three-stream session at the selected recording size/FPS. If rejected, the controller tries the YUV preview route and then telephoto alone. It does **not lower the selected recording resolution/FPS to retain the finder**. Change this option before recording; changing cameras halfway through a file is deliberately disabled. The inset, reticle and all controls are preview UI only, and never appear in the MP4.
+Recording keeps the finder on by default. Version 0.1.3 enables this once on upgrade; later explicit opt-outs persist. **Options → Keep 1× finder while recording** can turn it off. Recording with the finder probes a three-stream session at the selected recording size/FPS. If rejected, the controller tries the YUV preview route and then telephoto alone. It does **not lower the selected recording resolution/FPS to retain the finder**. Change this option before recording; changing cameras halfway through a file is deliberately disabled. The inset, reticle and all controls are preview UI only, and never appear in the MP4.
 
 Portrait and landscape previews fit the full sensor buffer without a digital zoom. The 1× inset follows the image aspect ratio within 212 × 150 dp, anchored at the top right, so unused black panels do not cover the telephoto view. Its dimensions update after rotation or switching between PRIVATE and YUV preview streams. PRIVATE previews account for Camera2's existing sensor rotation; raw YUV previews apply sensor rotation themselves. Both use the same aspect-preserving fit and respond to 180° display changes. Calibration is stored in sensor coordinates and rotates with the display. MP4 orientation is fixed when Record is pressed, so hold the phone in that orientation for the clip. Rotating during recording rotates the display but does not change the MP4 orientation tag. Leaving the app or locking the screen stops and attempts to save a valid recording; background recording is not implemented.
 
@@ -45,7 +45,7 @@ After `FOCUSED_LOCKED`, a returned **physical telephoto** focus distance is held
 
 ## Stabilisation and video modes
 
-Google specifies optical and electronic stabilisation on the Pixel 10 wide and telephoto cameras. That **does not establish which modes third-party Camera2 physical streams expose**. User diagnostics from a Pixel 10/API 37 running 0.1.0 confirm an accepted dual PRIVATE preview session with physical results from the main and telephoto cameras, and returned preview stabilisation mode 2. Preview orientation/distortion was reported and addressed in 0.1.1. Subsequent user feedback reports successful recording and good focus; it also identified black panels around the finder, addressed in 0.1.2. Effective AF/AE mapping, recording session acceptance, 4K/60 availability and thermal behaviour remain **unverified**. Diagnostics are the source of truth for the installed phone and OS version.
+Google specifies optical and electronic stabilisation on the Pixel 10 wide and telephoto cameras. That **does not establish which modes third-party Camera2 physical streams expose**. User diagnostics from a Pixel 10/API 37 running 0.1.0 confirm an accepted dual PRIVATE preview session with physical results from the main and telephoto cameras, and returned preview stabilisation mode 2. Preview orientation/distortion was reported and addressed in 0.1.1. Subsequent user feedback reports successful recording and good focus; it also identified black panels around the finder, addressed in 0.1.2. Further feedback confirms useful finder operation during recording. Effective AF/AE mapping, repeatable 4K/60 recording acceptance and thermal behaviour remain **unverified**. Diagnostics are the source of truth for the installed phone and OS version.
 
 The implementation queries physical OIS and video-stabilisation capabilities. Its automatic policy is:
 
@@ -53,9 +53,10 @@ The implementation queries physical OIS and video-stabilisation capabilities. It
 | --- | --- |
 | 1080p 30 | PREVIEW_STABILIZATION (HAL coordinates OIS/EIS), otherwise video EIS, otherwise OIS |
 | 4K 30 / 1080p 60 | OIS; EIS at these modes is not assumed |
+| Video stabilisation preference | Ordinary recording EIS at ≤1080p30 if exposed; otherwise OIS/off |
 | Optical-only preference | OIS, otherwise off |
 
-It does not force OIS ON alongside ordinary EIS ON; Android warns that they may interact poorly. Preview stabilisation permits the HAL to coordinate optical stabilisation. Stabilisation is supplied before session creation and returned OIS/EIS values are shown in diagnostics. If an EIS session fails after stream fallbacks, the controller retries with optical-only settings. If EIS is requested but returns OFF, diagnostics show this; choose Optical only for comparison. No custom post-processing or gyro recording is included. ScopeCam cannot eliminate all shake at this magnification, and monocular movement relative to the phone is not corrected by phone OIS.
+It does not force OIS ON alongside ordinary EIS ON; Android warns that they may interact poorly. Preview stabilisation permits the HAL to coordinate optical stabilisation. Stabilisation is supplied before session creation and returned OIS/EIS values are shown in diagnostics. If an EIS session fails after stream fallbacks, the controller retries with optical-only settings. **Stabilisation** selects Automatic (prefers preview+video mode 2), Video stabilisation (recording mode 1), or Optical only. The video comparison choice keeps the same conservative OIS fallback at 4K/60. Diagnostics show logical and telephoto returned modes separately, whether independent physical stabilisation keys exist, and retain the last recording results after Stop. Returned mode values confirm metadata, not the amount of shake correction. Compare modes at 1080p30 before deciding which works best with the monocular. No custom post-processing or gyro recording is included. ScopeCam cannot eliminate all shake at this magnification, and monocular movement relative to the phone is not corrected by phone OIS.
 
 Candidate 1080p30, 4K30 and 1080p60 modes are intersected with the **physical telephoto** recorder sizes, minimum frame duration, physical/logical FPS ranges and H.264 encoder limits. Only those candidates are offered. This is not a promise that a particular multi-output session will be accepted or that variable AE FPS ranges sustain the selected rate in low light. Failed recording sessions give an error; the app does not silently change cameras or recording formats. There are no high-speed, HDR or proprietary Google Camera processing paths.
 
@@ -68,7 +69,7 @@ Please test:
 - Cover the 1× lens: large preview and recording must stay telephoto. Cover telephoto: the large view goes dark while a working finder stays visible. Check the output bindings/physical results.
 - Try Target → Acquire → Target, calibration, repeated Refocus, successful/missed AF, and manual monocular focus while phone focus is held.
 - Record short clips in each offered mode; verify audio, gallery visibility, correct orientation, absence of inset/UI and actual telephoto image.
-- Compare automatic stabilisation and Optical only at 1080p30. Inspect returned stabilisation and AF/AE regions with black monocular borders.
+- Compare Automatic, Video stabilisation and Optical only at 1080p30. Inspect returned stabilisation and AF/AE regions with black monocular borders.
 - Try Keep finder while recording and check accepted/fallback session results, video continuity and heat during a longer clip. Session acceptance alone cannot establish thermal reliability.
 - Deny/regrant camera or microphone, background/resume, screen lock, rotate, rapidly switch modes and stop a very short clip. Inspect saved files and absence of abandoned pending videos.
 

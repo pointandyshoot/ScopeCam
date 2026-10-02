@@ -1,3 +1,11 @@
+# Recording finder and stabilisation comparison — 0.1.3
+
+The finder stays on by default during recording, with a one-time upgrade migration. Opting out afterwards persists. Existing physical-output fallbacks still handle rejected combinations without lowering the chosen recording mode or putting the finder into the MP4.
+
+A separate Video stabilisation choice requests recording EIS mode 1 instead of the automatic preference for preview+video mode 2. OIS-only selection is preserved from older preferences; no ordinary EIS/OIS combination is forced. At 4K/60 or without supported mode 1, the comparison choice falls back to OIS/off. Diagnostics distinguish logical/telephoto returned modes, physical key support, and last recording results retained after Stop. Metadata alone does not demonstrate effective shake reduction through a monocular.
+
+One additional policy test verifies the recording EIS choice and conservative fallback at unsupported modes/sizes/FPS, bringing the suite to 16 tests. The Android workflow checks tests, strict lint and APK compilation. Mode effectiveness and upgrade behaviour still require on-device confirmation. No image-based post-processing is included in this APK.
+
 # Finder sizing — 0.1.2
 
 The follow-up 0.1.1 screenshot shows a correctly oriented portrait finder image inside a fixed landscape-shaped panel. The user reports successful recording and good focus. The 0.1.2 finder uses the existing aspect-preserving geometry to measure its own bounds within 212 × 150 dp, follows rotation and PRIVATE/YUV stream-size changes, and stays anchored at the top right. Reticle/tap mapping uses the same fitted image rectangle. Camera output bindings and recording/focus controls are unchanged.

@@ -29,9 +29,10 @@ fun modeFits(mode: VideoMode, minimumFrameNs: Long, fpsRanges: List<IntRange>): 
 
 data class Stabilisation(val video: Int, val ois: Int, val label: String)
 /** PREVIEW_STABILIZATION lets the HAL coordinate OIS; never force competing OIS + EIS ON. */
-fun chooseStabilisation(videoModes: Set<Int>, oisModes: Set<Int>, mode: VideoMode, opticalOnly: Boolean): Stabilisation {
+fun chooseStabilisation(videoModes: Set<Int>, oisModes: Set<Int>, mode: VideoMode, opticalOnly: Boolean,
+                        videoOnly: Boolean = false): Stabilisation {
     if (!opticalOnly && mode.fps <= 30 && mode.width <= 1920) {
-        if (2 in videoModes) return Stabilisation(2, 0, "Platform preview + video")
+        if (!videoOnly && 2 in videoModes) return Stabilisation(2, 0, "Platform preview + video")
         if (1 in videoModes) return Stabilisation(1, 0, "Electronic video")
     }
     return if (1 in oisModes) Stabilisation(0, 1, "Optical") else Stabilisation(0, 0, "Unavailable")

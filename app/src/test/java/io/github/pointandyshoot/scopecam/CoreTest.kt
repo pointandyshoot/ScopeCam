@@ -46,6 +46,18 @@ class CoreTest {
         assertEquals(RegionBox(810, 620, 1210, 920), centreRegion(10, 20, 2000, 1500))
         assertEquals(RegionBox(0, 0, 1, 1), centreRegion(0, 0, 1, 1))
     }
+    @Test fun videoComparisonModeChoosesRecordingEisAndPreservesSafeFallbacks() {
+        val video = setOf(0, 1, 2); val ois = setOf(0, 1)
+        assertEquals(Stabilisation(1, 0, "Electronic video"),
+            chooseStabilisation(video, ois, VideoMode(1920, 1080, 30), false, true))
+        for (mode in listOf(VideoMode(3840, 2160, 30), VideoMode(1920, 1080, 60))) {
+            assertEquals(Stabilisation(0, 1, "Optical"), chooseStabilisation(video, ois, mode, false, true))
+        }
+        assertEquals(Stabilisation(0, 1, "Optical"),
+            chooseStabilisation(setOf(0, 2), ois, VideoMode(1920, 1080, 30), false, true))
+        assertEquals(Stabilisation(0, 1, "Optical"),
+            chooseStabilisation(video, ois, VideoMode(1920, 1080, 30), true, true))
+    }
     @Test fun calibrationRotationRoundTripsAcrossOrientations() {
         val point = Calibration(.2f, .7f)
         for (rotation in listOf(0, 90, 180, 270)) {

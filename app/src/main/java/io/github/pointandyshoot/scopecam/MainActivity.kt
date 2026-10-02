@@ -53,9 +53,11 @@ class MainActivity : Activity() {
         }
     }
     private val prefs by lazy { getSharedPreferences("scope", MODE_PRIVATE) }
-    private var opticalOnly: Boolean
-        get() = prefs.getBoolean("opticalOnly", false)
-        set(value) { prefs.edit().putBoolean("opticalOnly", value).apply() }
+    private var stabilisationMode: Int
+        get() = prefs.getInt("stabilisationMode", if (prefs.getBoolean("opticalOnly", false)) 2 else 0)
+        set(value) { prefs.edit().putInt("stabilisationMode", value).apply() }
+    private val opticalOnly: Boolean get() = stabilisationMode == 2
+    private val videoOnly: Boolean get() = stabilisationMode == 1
     private var continuous: Boolean
         get() = prefs.getBoolean("continuous", false)
         set(value) { prefs.edit().putBoolean("continuous", value).apply() }
@@ -63,6 +65,10 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        // Adopt the new recording default once; later explicit opt-outs persist.
+        if (!prefs.getBoolean("recordFinderDefaultV013", false)) {
+            prefs.edit().putBoolean("recordFinder", true).putBoolean("recordFinderDefaultV013", true).apply()
+        }
         finderOn = prefs.getBoolean("finder", true)
         buildUi()
         controller = CameraController(this, primary, finderPane, { info ->
@@ -155,6 +161,7 @@ class MainActivity : Activity() {
                 }.setNegativeButton("Cancel", null).show()
         }
         button("Options", extraRow) { options() }
+        button("Stabilisation", extraRow) { chooseStabilisationMode() }
         button("Diagnostics", extraRow) { diagnostics() }
         button("Last video", extraRow) {
             val uri = lastVideo
@@ -168,7 +175,7 @@ class MainActivity : Activity() {
 
     private fun beginRecording(audio: Boolean) {
         finderPane.calibrating = false
-        controller.record(prefs.getBoolean("recordFinder", false), audio, displayDegrees())
+        controller.record(prefs.getBoolean("recordFinder", true), audio, displayDegrees())
     }
     private fun updateUi(value: CameraStatus) {
         status = value
@@ -202,17 +209,26 @@ class MainActivity : Activity() {
     }
     private fun options() {
         if (status.recording || status.busy) { toast("Stop recording before changing options"); return }
-        val options = arrayOf("Keep 1× finder while recording (experimental)", "Continuous centre AF", "Optical stabilisation only")
-        val checked = booleanArrayOf(prefs.getBoolean("recordFinder", false), continuous, opticalOnly)
+        val options = arrayOf("Keep 1× finder while recording", "Continuous centre AF")
+        val checked = booleanArrayOf(prefs.getBoolean("recordFinder", true), continuous)
         AlertDialog.Builder(this).setTitle("Scope options")
             .setMultiChoiceItems(options, checked) { _, index, value -> checked[index] = value }
             .setPositiveButton("Apply") { _, _ ->
                 prefs.edit().putBoolean("recordFinder", checked[0]).apply()
-                val newFocus = checked[1]; val newOptical = checked[2]
+                val newFocus = checked[1]
                 if (continuous != newFocus) { continuous = newFocus; controller.setFocusBehaviour(newFocus) }
-                if (opticalOnly != newOptical) { opticalOnly = newOptical; controller.setOpticalOnly(newOptical) }
             }.setNeutralButton("Focus / exposure") { _, _ -> focusExposure() }
             .setNegativeButton("Cancel", null).show()
+    }
+    private fun chooseStabilisationMode() {
+        if (status.recording || status.busy) { toast("Stop recording before changing stabilisation"); return }
+        val choices = arrayOf("Automatic", "Video stabilisation", "Optical only")
+        AlertDialog.Builder(this).setTitle("Stabilisation")
+            .setSingleChoiceItems(choices, stabilisationMode.coerceIn(0, 2)) { dialog, index ->
+                stabilisationMode = index
+                controller.setStabilisation(opticalOnly, videoOnly)
+                dialog.dismiss()
+            }.setNegativeButton("Cancel", null).show()
     }
     private fun focusExposure() {
         val range = inventory?.tele?.get(android.hardware.camera2.CameraCharacteristics.CONTROL_AE_COMPENSATION_RANGE)
@@ -277,7 +293,7 @@ class MainActivity : Activity() {
         if (!active || started || !primary.ready || !finderPane.ready || requestingPermissions ||
             checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) return
         started = true
-        controller.start(prefs.getString("mode", null), finderOn, opticalOnly, continuous, displayDegrees())
+        controller.start(prefs.getString("mode", null), finderOn, opticalOnly, continuous, displayDegrees(), videoOnly)
         controller.setExposure(prefs.getInt("exposure", 0))
     }
     @Suppress("DEPRECATION")
