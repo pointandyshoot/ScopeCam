@@ -5,7 +5,7 @@ Verified on 2 October 2026:
 - JDK 17, AGP 9.4.0, Gradle 9.6.0, Android platform 37.0 and build tools 36.0.0.
 - A clean `testDebugUnitTest lintDebug assembleDebug` run passed, followed by the same checks after the calibration aspect-ratio fix.
 - **11 unit tests passed**, none skipped, no failures or errors.
-- Strict lint (`warningsAsErrors=true`): **No issues found**.
+- Strict lint (`warningsAsErrors=true`): **No issues found** locally. The online `AndroidGradlePluginVersion` upgrade-advisory rule is excluded so newer Gradle releases do not invalidate the pinned, tested AGP/Gradle pair; correctness checks remain strict.
 - Debug APK built; `apksigner verify` succeeded. Manifest inspection confirms version 0.1.0/code 1, minimum API 29, target API 37, and only CAMERA/RECORD_AUDIO permissions.
 - Gradle distribution checksum verified against its official SHA-256 and pinned in the wrapper.
 - `git diff --check` passed; staged source was checked for credentials, personal contact information and machine-specific paths. SDK locations, build output, signing files and downloaded tooling are excluded from source control.

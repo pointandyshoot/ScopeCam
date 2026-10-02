@@ -14,7 +14,13 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    lint { abortOnError = true; warningsAsErrors = true }
+    lint {
+        abortOnError = true
+        warningsAsErrors = true
+        // Pin the tested AGP/Gradle compatibility pair. Online upgrade advice must
+        // not make an otherwise identical build fail when a new Gradle is released.
+        disable += "AndroidGradlePluginVersion"
+    }
     testOptions { unitTests.isReturnDefaultValues = true }
 }
 dependencies { testImplementation("junit:junit:4.13.2") }
