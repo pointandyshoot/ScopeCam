@@ -152,8 +152,8 @@ class CameraController(
         orientation = value
         val info = inventory ?: return@post
         ui.post {
-            primary.rotatePreview(((info.tele[CC.SENSOR_ORIENTATION] ?: 90) - value + 360) % 360)
-            finder.rotatePreview(((info.wide[CC.SENSOR_ORIENTATION] ?: 90) - value + 360) % 360)
+            primary.rotatePreview(info.tele[CC.SENSOR_ORIENTATION] ?: 90, value)
+            finder.rotatePreview(info.wide[CC.SENSOR_ORIENTATION] ?: 90, value)
         }
     }
     fun refocus() = worker.post { refocusInternal() }
@@ -324,7 +324,7 @@ class CameraController(
     private fun previewSurface(pane: PreviewPane, size: Size, characteristics: CC, asYuv: Boolean): Surface {
         val sensor = characteristics[CC.SENSOR_ORIENTATION] ?: 90
         characteristics[CC.SENSOR_INFO_ACTIVE_ARRAY_SIZE]?.let { pane.sensorAspect(it.width().toFloat() / it.height()) }
-        if (!asYuv) return pane.surface(size, (sensor - orientation + 360) % 360).also { surfaces.add(it) }
+        if (!asYuv) return pane.surface(size, sensor, orientation).also { surfaces.add(it) }
         val yuvSize = requireNotNull(inventory?.yuvPairSize)
         val reader = ImageReader.newInstance(yuvSize.width, yuvSize.height, ImageFormat.YUV_420_888, 3)
         readers.add(reader)
@@ -337,7 +337,8 @@ class CameraController(
                 lastImage = now
                 val bitmap = runCatching { YuvConverter.toBitmap(it) }.getOrNull() ?: return@use
                 val imageToken = token
-                ui.post { if (imageToken == token && running) pane.showYuv(bitmap, (sensor - orientation + 360) % 360) else bitmap.recycle() }
+                val display = orientation
+                ui.post { if (imageToken == token && running) pane.showYuv(bitmap, sensor, display) else bitmap.recycle() }
             }
         }, worker)
         return reader.surface

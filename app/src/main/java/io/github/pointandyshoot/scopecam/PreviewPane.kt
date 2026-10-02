@@ -9,16 +9,17 @@ import android.view.TextureView
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.ImageView
-import kotlin.math.min
 
 /** Preview-only transform; fits the complete buffer, preserving calibration coordinates. */
 class PreviewPane(context: Context) : FrameLayout(context) {
     val texture = TextureView(context)
-    private val image = ImageView(context).apply { scaleType = ImageView.ScaleType.FIT_CENTER }
+    private val image = ImageView(context).apply { scaleType = ImageView.ScaleType.MATRIX }
     private val overlay = FinderOverlay(context)
     private var bitmap: Bitmap? = null
     @Volatile private var sourceSize = Size(1280, 720)
-    @Volatile private var rotationDegrees = 0
+    @Volatile private var sensorDegrees = 90
+    @Volatile private var displayDegrees = 0
+    private val rotationDegrees: Int get() = (sensorDegrees - displayDegrees + 360) % 360
     @Volatile private var sensorAspect = 4f / 3f
     var onReady: (() -> Unit)? = null
     var onLost: (() -> Unit)? = null
@@ -62,20 +63,21 @@ class PreviewPane(context: Context) : FrameLayout(context) {
     override fun performClick(): Boolean { super.performClick(); return true }
     val ready: Boolean get() = texture.isAvailable
     fun sensorAspect(value: Float) { sensorAspect = value; post { updateTransform() } }
-    fun rotatePreview(rotation: Int) { rotationDegrees = rotation; updateTransform() }
-    fun surface(size: Size, rotation: Int): Surface {
-        sourceSize = size; rotationDegrees = rotation
+    fun rotatePreview(sensor: Int, display: Int) {
+        sensorDegrees = sensor; displayDegrees = display; updateTransform()
+    }
+    fun surface(size: Size, sensor: Int, display: Int): Surface {
+        sourceSize = size; sensorDegrees = sensor; displayDegrees = display
         val source = texture.surfaceTexture ?: error("Preview surface is not ready")
         source.setDefaultBufferSize(size.width, size.height)
         post { clearYuv(); updateTransform() }
         return Surface(source)
     }
-    fun showYuv(value: Bitmap, rotation: Int) {
-        sourceSize = Size(value.width, value.height); rotationDegrees = rotation
-        val matrix = Matrix().apply { postRotate(rotation.toFloat()) }
-        val rotated = if (rotation == 0) value else Bitmap.createBitmap(value, 0, 0, value.width, value.height, matrix, true).also { value.recycle() }
-        bitmap = rotated
-        image.setImageBitmap(rotated); image.visibility = VISIBLE
+    fun showYuv(value: Bitmap, sensor: Int, display: Int) {
+        sourceSize = Size(value.width, value.height); sensorDegrees = sensor; displayDegrees = display
+        bitmap = value
+        value.density = Bitmap.DENSITY_NONE // Matrix coordinates are buffer pixels, not dp.
+        image.setImageBitmap(value); image.visibility = VISIBLE
         // Displayed bitmaps are collected after RenderThread releases them; recycling
         // them on a handler can race a queued display-list draw.
         updateTransform()
@@ -86,27 +88,22 @@ class PreviewPane(context: Context) : FrameLayout(context) {
     }
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) { super.onSizeChanged(w, h, oldw, oldh); updateTransform() }
     private fun contentRect(): RectF {
-        val swap = rotationDegrees % 180 != 0
-        val sw = if (swap) sourceSize.height else sourceSize.width
-        val sh = if (swap) sourceSize.width else sourceSize.height
-        val scale = min(width.toFloat() / sw, height.toFloat() / sh)
-        val w = sw * scale; val h = sh * scale
+        if (width == 0 || height == 0) return RectF()
+        val geometry = geometry()
+        val w = geometry.contentWidth; val h = geometry.contentHeight
         return RectF((width - w) / 2, (height - h) / 2, (width + w) / 2, (height + h) / 2)
     }
+    private fun geometry() = previewGeometry(sourceSize.width, sourceSize.height, width, height,
+        sensorDegrees, displayDegrees)
+    fun diagnostics(): String = "${if (image.visibility == VISIBLE) "YUV" else "PRIVATE"} · buffer=$sourceSize · view=${width}x$height · sensor=$sensorDegrees° · display=$displayDegrees° · relative=$rotationDegrees°"
     private fun updateTransform() {
         if (width == 0 || height == 0) return
         val area = contentRect()
-        val matrix = Matrix()
-        // TextureView initially stretches its buffer to view bounds. Undo that stretch,
-        // rotate around its centre, then fit the sensor image into the view.
-        matrix.postScale(sourceSize.width.toFloat() / width, sourceSize.height.toFloat() / height)
-        matrix.postTranslate(-sourceSize.width / 2f, -sourceSize.height / 2f)
-        matrix.postRotate(rotationDegrees.toFloat())
-        val rotatedWidth = if (rotationDegrees % 180 == 0) sourceSize.width else sourceSize.height
-        val scale = area.width() / rotatedWidth
-        matrix.postScale(scale, scale)
-        matrix.postTranslate(width / 2f, height / 2f)
-        texture.setTransform(matrix)
+        val geometry = geometry()
+        // PRIVATE already has sensor rotation. Undo its stretch using those rotated
+        // dimensions, then compensate only display rotation. Raw YUV needs both.
+        texture.setTransform(Matrix().apply { setValues(geometry.textureMatrix) })
+        image.imageMatrix = Matrix().apply { setValues(geometry.rawMatrix) }
         overlay.area = area
         overlay.point = rotatePoint(previewPoint(calibration, sensorAspect, sourceSize.width.toFloat() / sourceSize.height), rotationDegrees)
         overlay.fraction = finderFraction

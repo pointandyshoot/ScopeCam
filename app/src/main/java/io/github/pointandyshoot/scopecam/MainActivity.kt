@@ -8,8 +8,11 @@ import android.content.ClipboardManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.hardware.display.DisplayManager
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.view.Gravity
 import android.view.Surface
@@ -40,6 +43,15 @@ class MainActivity : Activity() {
     private var finderOn = true
     private var selectedMode: VideoMode? = null
     private var lastVideo: Uri? = null
+    private val displayManager by lazy { getSystemService(DisplayManager::class.java) }
+    private val displayListener = object : DisplayManager.DisplayListener {
+        override fun onDisplayAdded(displayId: Int) = Unit
+        override fun onDisplayRemoved(displayId: Int) = Unit
+        override fun onDisplayChanged(displayId: Int) {
+            // A 180° turn can leave both view size and configuration unchanged.
+            if (active && primary.display?.displayId == displayId) controller.displayRotation(displayDegrees())
+        }
+    }
     private val prefs by lazy { getSharedPreferences("scope", MODE_PRIVATE) }
     private var opticalOnly: Boolean
         get() = prefs.getBoolean("opticalOnly", false)
@@ -220,7 +232,7 @@ class MainActivity : Activity() {
             .setNegativeButton("Close", null).show()
     }
     private fun diagnostics() {
-        val content = status.details
+        val content = status.details + "\n\nTele preview: ${primary.diagnostics()}\nFinder preview: ${finderPane.diagnostics()}"
         val scroll = ScrollView(this)
         scroll.addView(label(content, 12).apply { setPadding(dp(16), dp(8), dp(16), dp(8)); setTextIsSelectable(true) })
         AlertDialog.Builder(this).setTitle("ScopeCam diagnostics").setView(scroll)
@@ -229,12 +241,20 @@ class MainActivity : Activity() {
                 toast("Diagnostics copied")
             }.show()
     }
-    override fun onResume() { super.onResume(); active = true; ensurePermissions(); maybeStart() }
+    override fun onResume() {
+        super.onResume(); active = true
+        displayManager.registerDisplayListener(displayListener, Handler(Looper.getMainLooper()))
+        ensurePermissions(); maybeStart()
+    }
     override fun onConfigurationChanged(config: android.content.res.Configuration) {
         super.onConfigurationChanged(config)
         controller.displayRotation(displayDegrees())
     }
-    override fun onPause() { active = false; started = false; controller.pause(); super.onPause() }
+    override fun onPause() {
+        active = false; started = false
+        displayManager.unregisterDisplayListener(displayListener)
+        controller.pause(); super.onPause()
+    }
     override fun onDestroy() { controller.destroy(); super.onDestroy() }
     private fun ensurePermissions() {
         if (requestingPermissions || checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) return

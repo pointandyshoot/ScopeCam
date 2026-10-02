@@ -1,3 +1,13 @@
+# Preview correction — 0.1.1
+
+The 0.1.0 Pixel 10/API 37 user report confirmed an accepted physical PRIVATE preview pair and capture results from both main and telephoto cameras. It also identified incorrect orientation and a distorted telephoto preview.
+
+The 0.1.1 correction separates Camera2's automatic PRIVATE sensor rotation from the app's display compensation, reverses TextureView stretching using the sensor-oriented dimensions, and fits with one pixel scale on both axes. Raw YUV uses its own sensor-to-display transform. Finder calibration shares the fitted content rectangle. A display listener handles 180° turns even when the configuration and view size do not change. Diagnostics include preview buffer/view dimensions and sensor/display/relative rotation.
+
+Four new geometry tests check known Pixel portrait/landscape corner positions, PRIVATE/YUV agreement, roundness, centring, and fitting for 128 sensor/display/view/buffer combinations. Together with the existing policy tests this gives 15 unit tests. The Android workflow runs `testDebugUnitTest lintDebug assembleDebug`; its result and downloadable APK are under Actions for the fixing commit.
+
+On-device confirmation is still needed: point at an upright printed square or circle, rotate through portrait and both landscape directions, and check that it stays upright and undistorted in both previews. Recheck calibration and a saved clip. The MP4 orientation remains fixed at recording start.
+
 # Initial build verification — 0.1.0
 
 Verified on 2 October 2026:
@@ -23,4 +33,4 @@ Code review covered the following paths. These are structural checks, **not on-d
 | Error recovery | Dual PRIVATE → equal YUV → tele-only fallbacks; optical-only retry for rejected EIS; camera errors/frame watchdogs release resources and show an explicit retry route. |
 | Calibration | Offset is in normalised full-sensor coordinates, accounting for display rotation and centre crops between 16:9 PRIVATE and 4:3 YUV previews. |
 
-**No Android device or emulator was connected.** Pixel 10 stream combinations, actual physical metering/focus propagation, stabilisation effectiveness, sustained FPS, optics, recording playback/audio and thermal behaviour remain unverified. Follow the README's first-Pixel-test checklist and share Diagnostics output. Do not interpret a compiled APK, session-support query or unit-test pass as confirmation of these hardware behaviours.
+**No Android device or emulator was connected during these initial build checks.** The later user report confirms the dual PRIVATE preview session, but recording stream combinations, actual physical metering/focus propagation, stabilisation effectiveness, sustained FPS, optics, recording playback/audio and thermal behaviour remain unverified. Follow the README's first-Pixel-test checklist and share Diagnostics output. Do not interpret a compiled APK, session-support query or unit-test pass as confirmation of these hardware behaviours.

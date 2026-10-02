@@ -1,6 +1,6 @@
 # ScopeCam
 
-A video-first, offline Android camera for a **Pixel 10 (non-Pro)** with a **10× monocular over its 5× telephoto lens**. ScopeCam 0.1.0 is an initial device-testing build, not a verified replacement for Google Camera's processing.
+A video-first, offline Android camera for a **Pixel 10 (non-Pro)** with a **10× monocular over its 5× telephoto lens**. ScopeCam 0.1.1 is a device-testing build. It corrects the preview orientation and aspect ratio reported in 0.1.0.
 
 ## Build and install
 
@@ -25,7 +25,7 @@ Set `ANDROID_HOME` to your SDK location or let Android Studio create the ignored
 
 Recording turns off the finder by default. **Options → Keep 1× finder while recording** probes an experimental three-stream session at the selected recording size/FPS. If rejected, the controller tries the YUV preview route and then telephoto alone. It does **not lower the selected recording resolution/FPS to retain the finder**. Change this option before recording; changing cameras halfway through a file is deliberately disabled. The inset, reticle and all controls are preview UI only, and never appear in the MP4.
 
-Portrait and landscape previews fit the full sensor buffer without a digital zoom. Calibration is stored in sensor coordinates and rotates with the display. MP4 orientation is fixed when Record is pressed, so hold the phone in that orientation for the clip. Rotating during recording rotates the display but does not change the MP4 orientation tag. Leaving the app or locking the screen stops and attempts to save a valid recording; background recording is not implemented.
+Portrait and landscape previews fit the full sensor buffer without a digital zoom. PRIVATE previews account for Camera2's existing sensor rotation; raw YUV previews apply sensor rotation themselves. Both use the same aspect-preserving fit and respond to 180° display changes. Calibration is stored in sensor coordinates and rotates with the display. MP4 orientation is fixed when Record is pressed, so hold the phone in that orientation for the clip. Rotating during recording rotates the display but does not change the MP4 orientation tag. Leaving the app or locking the screen stops and attempts to save a valid recording; background recording is not implemented.
 
 ## Physical-camera selection and session architecture
 
@@ -45,7 +45,7 @@ After `FOCUSED_LOCKED`, a returned **physical telephoto** focus distance is held
 
 ## Stabilisation and video modes
 
-Google specifies optical and electronic stabilisation on the Pixel 10 wide and telephoto cameras. That **does not establish which modes third-party Camera2 physical streams expose**. This project has not yet been run on a physical Pixel 10; the exact mode IDs, dual-stream acceptance, effective AF/AE mapping, 4K/60 availability and thermal behaviour are **unverified**. Diagnostics are the source of truth for the installed phone and OS version.
+Google specifies optical and electronic stabilisation on the Pixel 10 wide and telephoto cameras. That **does not establish which modes third-party Camera2 physical streams expose**. User diagnostics from a Pixel 10/API 37 running 0.1.0 confirm an accepted dual PRIVATE preview session with physical results from the main and telephoto cameras, and returned preview stabilisation mode 2. Preview orientation/distortion was reported and is addressed in 0.1.1; the correction still needs on-device confirmation. Effective AF/AE mapping, recording session acceptance, 4K/60 availability and thermal behaviour remain **unverified**. Diagnostics are the source of truth for the installed phone and OS version.
 
 The implementation queries physical OIS and video-stabilisation capabilities. Its automatic policy is:
 
@@ -61,7 +61,7 @@ Candidate 1080p30, 4K30 and 1080p60 modes are intersected with the **physical te
 
 ## Diagnostics and first Pixel test
 
-Open **Diagnostics → Copy**. It contains app version, model/API, logical and physical IDs, focal lengths/FOV, selected lenses, stream candidates, AF/AE/physical-key support, session probe/fallback results, requested and returned stabilisation, physical-result IDs, lens distance, crop and FPS/region metadata. It excludes account details, device serial/IMEI, location, filenames and other personal information. Diagnostics are local and copied only on request.
+Open **Diagnostics → Copy**. It contains app version, model/API, logical and physical IDs, focal lengths/FOV, selected lenses, stream candidates, AF/AE/physical-key support, session probe/fallback results, requested and returned stabilisation, physical-result IDs, lens distance, crop and FPS/region metadata, plus each preview's buffer/view dimensions and sensor/display rotation. It excludes account details, device serial/IMEI, location, filenames and other personal information. Diagnostics are local and copied only on request.
 
 Please test:
 
@@ -72,7 +72,7 @@ Please test:
 - Try Keep finder while recording and check accepted/fallback session results, video continuity and heat during a longer clip. Session acceptance alone cannot establish thermal reliability.
 - Deny/regrant camera or microphone, background/resume, screen lock, rotate, rapidly switch modes and stop a very short clip. Inspect saved files and absence of abandoned pending videos.
 
-Automated unit tests cover FOV selection, encoder binding invariants, mode-duration/FPS limits, stabilisation policies, centre regions and calibration rotation. Lint and APK compilation catch static Android/API issues. These do not validate the Pixel HAL, optical alignment, audio/video quality or real stabilisation; those need the physical device.
+Automated unit tests cover FOV selection, encoder binding invariants, mode-duration/FPS limits, stabilisation policies, centre regions, calibration rotation, and preview geometry across all four sensor/display orientations, portrait/landscape/square/inset viewports and PRIVATE/YUV buffer sizes. Lint and APK compilation catch static Android/API issues. These do not validate the Pixel HAL, optical alignment, audio/video quality or real stabilisation; those need the physical device.
 
 ## Privacy and scope
 
